@@ -1,6 +1,7 @@
 Package: maptpx
 Title:  MAP Estimation of Topic Models
-Version: 1.9-7
+Version: 1.9-8
+Date: 2021-05-06
 Author: Matt Taddy <mataddy@gmail.com>
 Depends: R (>= 2.10), slam
 Suggests: MASS

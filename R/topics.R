@@ -2,7 +2,7 @@
 
 ## intended main function; provides defaults and selects K via marginal lhd
 topics <- function(counts, K, shape=NULL, initopics=NULL, tol=0.1, 
-                   bf=FALSE, kill=2, ord=TRUE, verb=1, ...)
+                   bf=FALSE, kill=2, ord=TRUE, verb=1, omega=NULL,...)
   ## tpxselect defaults: tmax=10000, wtol=10^(-4), qn=100, grp=NULL, admix=TRUE, nonzero=FALSE, dcut=-10
 {
   X <- CheckCounts(counts)
@@ -19,9 +19,10 @@ topics <- function(counts, K, shape=NULL, initopics=NULL, tol=0.1,
  
   ## initialize
   initopics <- tpxinit(X[1:min(ceiling(nrow(X)*.05),100),], initopics, K[1], shape, verb)
-  
+
   ## either search for marginal MAP K and return bayes factors, or just fit
-  tpx <- tpxSelect(X, K, bf, initopics, alpha=shape, tol, kill, verb, ...)
+  tpx <- tpxSelect(X, K, bf, initopics, alpha=shape, tol, kill, verb,
+                   omega = omega,...)
   K <- tpx$K
   
   ## clean up and out
@@ -31,9 +32,10 @@ topics <- function(counts, K, shape=NULL, initopics=NULL, tol=0.1,
   theta=matrix(tpx$theta[,worder], ncol=K, dimnames=list(phrase=dimnames(X)[[2]], topic=paste(1:K)) )
   omega=matrix(tpx$omega[,worder], ncol=K, dimnames=list(document=NULL, topic=paste(1:K)) )
   if(nrow(omega)==nrow(X)){ dimnames(omega)[[1]] <- dimnames(X)[[1]] }
-  
+
   ## topic object
-  out <- list(K=K, theta=theta, omega=omega, BF=tpx$BF, D=tpx$D, X=X)
+  out <- list(K=K, theta=theta, omega=omega, BF=tpx$BF, D=tpx$D, X=X,
+              progress=tpx$progress)
   class(out) <- "topics"
   invisible(out) }
 

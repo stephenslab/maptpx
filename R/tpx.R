@@ -15,9 +15,10 @@ CheckCounts <- function(counts){
 }
  
 ## Topic estimation and selection for a list of K values
-tpxSelect <- function(X, K, bf, initheta, alpha, tol, kill, verb,
+tpxSelect <- function(X, K, bf, initheta, alpha, tol, kill, verb, 
                       admix=TRUE, grp=NULL, tmax=10000,
-                      wtol=10^{-4}, qn=100, nonzero=FALSE, dcut=-10){
+                      wtol=10^{-4}, qn=100, nonzero=FALSE, dcut=-10,
+                      omega=NULL){
 
   ## check grp if simple mixture
   if(!admix){
@@ -29,7 +30,8 @@ tpxSelect <- function(X, K, bf, initheta, alpha, tol, kill, verb,
   if(length(K)==1 && bf==FALSE){
     if(verb){ cat(paste("Fitting the",K,"topic model.\n")) }
     fit <-  tpxfit(X=X, theta=initheta, alpha=alpha, tol=tol, verb=verb,
-                   admix=admix, grp=grp, tmax=tmax, wtol=wtol, qn=qn)
+                   admix=admix, grp=grp, tmax=tmax, wtol=wtol, qn=qn,
+                   omega=omega)
     fit$D <- tpxResids(X=X, theta=fit$theta, omega=fit$omega, grp=grp, nonzero=nonzero)$D
     return(fit)
   }
@@ -150,7 +152,8 @@ tpxinit <- function(X, initheta, K1, alpha, verb){
 ## ** main workhorse function.  Only Called by the above wrappers.
 ## topic estimation for a given number of topics (taken as ncol(theta))
 tpxfit <- function(X, theta, alpha, tol, verb,
-                   admix, grp, tmax, wtol, qn)
+                   admix, grp, tmax, wtol, qn,
+                   omega = NULL)
 {
   ## inputs and dimensions
   if(!inherits(X,"simple_triplet_matrix")){ stop("X needs to be a simple_triplet_matrix") }
@@ -167,9 +170,12 @@ tpxfit <- function(X, theta, alpha, tol, verb,
   doc <- c(0,cumsum(as.double(table(factor(X$i, levels=c(1:nrow(X)))))))
   
   ## Initialize
-  omega <- tpxweights(n=n, p=p, xvo=xvo, wrd=wrd, doc=doc, start=tpxOmegaStart(X,theta), theta=theta)
-  if(!admix){ omega <- matrix(apply(omega,2, function(w) tapply(w,grp,mean)), ncol=K) }
-
+  if (is.null(omega))
+    omega <- tpxweights(n=n, p=p, xvo=xvo, wrd=wrd, doc=doc,
+                        start=tpxOmegaStart(X,theta), theta=theta)
+  if(!admix)
+    omega <- matrix(apply(omega,2, function(w) tapply(w,grp,mean)), ncol=K) 
+  
   ## tracking
   iter <- 0
   dif <- tol+1+qn
@@ -182,8 +188,9 @@ tpxfit <- function(X, theta, alpha, tol, verb,
   Q0 <- col_sums(X)/sum(X)
   L <- tpxlpost(X=X, theta=theta, omega=omega, alpha=alpha, admix=admix, grp=grp) 
  # if(is.infinite(L)){ L <- sum( (log(Q0)*col_sums(X))[Q0>0] ) }
-  
+
   ## Iterate towards MAP
+  progress <- rep(0,tmax)
   while( update  && iter < tmax ){ 
 
     ## sequential quadratic programming for conditional Y solution
@@ -208,40 +215,27 @@ tpxfit <- function(X, theta, alpha, tol, verb,
     dif <- (QNup$L-L)
    
     L <- QNup$L
+    progress[iter] <- L
     
-        
     ## check convergence
     if(abs(dif) < tol){
       if(sum(abs(theta-move$theta)) < tol){ update = FALSE } }
 
     ## print
-    if(verb>0 && (iter-1)%%ceiling(10/verb)==0 && iter>0){
-      cat( paste( round(dif,digits), #" (", sum(abs(theta-move$theta)),")",
-                 ", ", sep="") ) }
+    if(verb>0 && iter>0)
+      cat(sprintf("%+0.12e\n",L))
     
-    ## heartbeat for long jobs
-    if(((iter+1)%%1000)==0){ 
-          cat(sprintf("p %d iter %d diff %g\n",
-                nrow(theta), iter+1,round(dif))) }
-
     ## iterate
     iter <- iter+1
     theta <- move$theta
     omega <- move$omega
-    
   }
 
   ## final log posterior
   L <- tpxlpost(X=X, theta=theta, omega=omega, alpha=alpha, admix=admix, grp=grp) 
 
-  ## summary print
-  if(verb>0){
-    cat("done.")
-    if(verb>1) { cat(paste(" (L = ", round(L,digits), ")", sep="")) }
-    cat("\n")
-  }
-  
-  out <- list(theta=theta, omega=omega, K=K, alpha=alpha, L=L, iter=iter)
+  out <- list(theta=theta, omega=omega, K=K, alpha=alpha, L=L, iter=iter,
+              progress=progress[1:(iter-1)])
   invisible(out) }
 
  
